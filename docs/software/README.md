@@ -162,242 +162,240 @@ SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;
 
 # Реалізація доступу до бази даних
 
-# Файл ApplicationDbContext.cs
+# Підключення до бази даних
+
 ```
-using Microsoft.EntityFrameworkCore;
-using WebAPI.Models;
+const mysql = require('mysql');
 
-namespace WebAPI;
-
-public class ApplicationDbContext : DbContext
-{
-    public DbSet<User> Users { get; set; }
-
-    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> dbContext) : base(dbContext)
-    {
-    }
-}
-```
-
-# Файл UserRepository.cs
-```
-using Microsoft.EntityFrameworkCore;
-using WebAPI.Interfaces;
-using WebAPI.Models;
-
-namespace WebAPI.Repositories;
-
-public class UserRepository : IUserRepository
-{
-    private readonly ApplicationDbContext _dbContext;
-
-    public UserRepository(ApplicationDbContext dbContext)
-    {
-        _dbContext = dbContext;
-    }
-
-    public IQueryable<User> GetAllUsers()
-    {
-        return _dbContext.Users;
-    }
-
-    public User GetUserById(int id)
-    {
-        return _dbContext.Users.FirstOrDefault(user => user.Id == id);
-    }
-
-    public void AddUser(User user)
-    {
-        _dbContext.Users.Add(user);
-    }
-
-    public void UpdateUser(User user)
-    {
-        _dbContext.Users.Update(user);
-    }
-
-    public void DeleteUser(User user)
-    {
-        _dbContext.Users.Remove(user);
-    }
-
-    public int SaveChanges()
-    {
-        return _dbContext.SaveChanges();
-    }
-}
-```
-
-# Файл UserService.cs
-```
-using WebAPI.Interfaces;
-using WebAPI.Models;
-
-namespace WebAPI.Services;
-
-public class UserService : IUserService
-{
-    private readonly IUserRepository _userRepository;
-
-    public UserService(IUserRepository userRepository)
-    {
-        _userRepository = userRepository;
-    }
-
-    public IQueryable<User> GetAllUsers()
-    {
-        return _userRepository.GetAllUsers();
-    }
-
-    public User GetUserById(int id)
-    {
-        return _userRepository.GetUserById(id);
-    }
-
-    public void AddUser(User user)
-    {
-        _userRepository.AddUser(user);
-    }
-
-    public void UpdateUser(User user)
-    {
-        _userRepository.UpdateUser(user);
-    }
-
-    public void DeleteUser(User user)
-    {
-        _userRepository.DeleteUser(user);
-    }
-
-    public int SaveChanges()
-    {
-        return _userRepository.SaveChanges();
-    }
-}
-```
-
-# Файл UserController.cs
-```
-using Microsoft.AspNetCore.Mvc;
-using WebAPI.Interfaces;
-using WebAPI.Models;
-
-namespace WebAPI.Controllers;
-
-[ApiController]
-[Route("api/[controller]")]
-public class UserController : ControllerBase
-{
-    private readonly IUserService _userService;
-
-    public UserController(IUserService userService)
-    {
-        _userService = userService;
-    }
-
-    [HttpGet]
-    [Route("[action]")]
-    public ActionResult<IEnumerable<User>> GetAll()
-    {
-        IEnumerable<User> users = _userService.GetAllUsers();
-        if (users is null) return NotFound("Users not found");
-        return Ok(users);
-    }
-
-    [HttpGet("{id}")]
-    public ActionResult<User> Get(int id)
-    {
-        User user = _userService.GetUserById(id);
-        if (user is null) return NotFound("User not found.");
-        return Ok(user);
-    }
-
-    [HttpDelete]
-    public ActionResult Delete(User user)
-    {
-        try
-        {
-            _userService.DeleteUser(user);
-            _userService.SaveChanges();
-        }
-        catch (Exception)
-        {
-            return BadRequest("Bad request.");
-        }
-        
-        return Ok("User was deleted.");
-    }
-
-    [HttpPost]
-    public ActionResult Post(User user)
-    {
-        try
-        {
-            _userService.AddUser(user);
-            _userService.SaveChanges();
-        }
-        catch (Exception)
-        {
-            return BadRequest("Bad request.");
-        }
-
-        return Ok("User was added.");
-    }
-    
-    [HttpPut]
-    public ActionResult Put(User user)
-    {
-        try
-        {
-            _userService.UpdateUser(user);
-            _userService.SaveChanges();
-        }
-        catch (Exception)
-        {
-            return BadRequest("Bad request.");
-        }
-
-        return Ok("User was updated.");
-    }
-}
-```
-
-# Файл Program.cs
-```
-using Microsoft.EntityFrameworkCore;
-using WebAPI;
-using WebAPI.Interfaces;
-using WebAPI.Repositories;
-using WebAPI.Services;
-
-var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddControllers();
-
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-{
-    string connectionString = builder.Configuration.GetConnectionString("DatabaseCS");
-    MySqlServerVersion serverVersion = new MySqlServerVersion(new Version(5, 7, 32));
-    options.UseMySql(connectionString, serverVersion);
+const connection = mysql.createConnection({
+  host: 'localhost',
+  user: 'user',
+  password: '13124',
+  database: 'mydb',
 });
 
-builder.Services.AddScoped<IUserRepository, UserRepository>();
-builder.Services.AddScoped<IUserService, UserService>();
+module.exports = connection;
+```
 
-builder.Services.AddSwaggerGen();
+# API для обробки запитів
 
-var app = builder.Build();
+```
+const { Router } = require('express')
+const router = Router()
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseDeveloperExceptionPage();
+const connection = require('../db')
 
-    app.UseSwagger();
-    app.UseSwaggerUI();
+const { ERRORS, SUCCESS } = require('../constants')
+
+router.get('/answers', (req, res) => {
+  connection.query('select * from answer', (err, answers) => {
+    if (err) {
+      console.log(err)
+      res.status(500).json({
+        message: ERRORS.SERVER_ERROR,
+      })
+      return
+    }
+
+    res.status(200).json({
+      data: answers,
+    })
+  })
+})
+
+router.get('/answer/:id', (req, res) => {
+  const { id } = req.params
+  connection.query(`select * from answer where id = ${id}`, (err, [answer]) => {
+    if (err) {
+      console.log(err)
+      res.status(500).json({
+        message: ERRORS.SERVER_ERROR,
+      })
+      return
+    }
+
+    if (!answer) {
+      res.status(404).json({
+        message: ERRORS.NOT_FOUND,
+      })
+      return
+    }
+
+    res.status(200).json({
+      data: answer,
+    })
+  })
+})
+
+router.post('/answer', (req, res) => {
+  const { user_id, text, data, answer_id } = req.body
+
+  if (!(user_id && text && data && answer_id)) {
+    res.status(400).json({
+      message: ERRORS.ALL_FIELDS_REQUIRED,
+    })
+    return
+  }
+
+  connection.query(
+    `insert into answer (
+        user_id,
+        text,
+        data,
+        answer_id
+      ) values (
+        ${user_id},
+        "${text}",
+        "${data}",
+        ${answer_id}
+      )`,
+    (err) => {
+      if (err) {
+        console.log(err)
+        res.status(500).json({
+          message: ERRORS.SERVER_ERROR,
+        })
+        return
+      }
+
+      res.status(201).json({
+        message: SUCCESS.PROJECT_CREATED,
+      })
+    },
+  )
+})
+
+router.put('/answer/:id', (req, res) => {
+  const { id } = req.params
+
+  connection.query(`select * from answer where id = ${id}`, (err, [answer]) => {
+    if (err) {
+      console.log(err)
+      res.status(500).json({
+        message: ERRORS.SERVER_ERROR,
+      })
+      return
+    }
+
+    if (!answer) {
+      res.status(404).json({
+        message: ERRORS.NOT_FOUND,
+      })
+      return
+    }
+
+    const { user_id, text, data, answer_id } = {
+      ...answer,
+      ...req.body,
+    }
+
+    connection.query(
+      `update answer set 
+        user_id = ${user_id}, 
+        text = "${text}",
+        data = "${data}",
+        answer_id = ${answer_id}
+        where id = ${id}`,
+      (err) => {
+        if (err) {
+          console.log(err);
+          res.status(500).json({
+            message: ERRORS.SERVER_ERROR,
+          })
+          return
+        }
+
+        res.status(200).json({
+          message: SUCCESS.PROJECT_UPDATED,
+        })
+      },
+    )
+  })
+})
+
+router.delete('/answer/:id', (req, res) => {
+  const { id } = req.params
+  connection.query(`delete from answer where id = ${id}`, (err) => {
+    if (err) {
+      console.log(err);
+      res.status(500).json({
+        message: ERRORS.SERVER_ERROR,
+      })
+      return
+    }
+
+    res.status(200).json({
+      message: SUCCESS.PROJECT_DELETED,
+    })
+  })
+})
+
+module.exports = router
+
+```
+
+# Утиліти
+
+```
+const decodeId = (bufferArray) => {
+  return Buffer.from(bufferArray).toString('hex')
 }
 
-app.UseStatusCodePages();
-app.MapDefaultControllerRoute();
+module.exports = { decodeId }
+```
 
-app.Run();
+# Фалз з константами для відповідей з серверу
+
+```
+const ERRORS = {
+  SERVER_ERROR: 'Error on server. Try later',
+  ALL_FIELDS_REQUIRED: 'All fields are required',
+  NOT_FOUND: 'Answer was not found. Check the id',
+};
+
+module.exports = ERRORS;
+```
+
+```
+const SUCCESS = {
+  PROJECT_CREATED: 'New answer was created',
+  PROJECT_UPDATED: 'Answer has been updated',
+  PROJECT_DELETED: 'Answer was deleted',
+}
+
+module.exports = SUCCESS
+```
+
+```
+const ERRORS = require('./errors')
+const SUCCESS = require('./success')
+
+module.exports = {
+  ERRORS,
+  SUCCESS,
+}
+```
+
+# Головний файл серверу
+
+```
+const express = require("express");
+const cors = require("cors");
+const bodyParser = require("body-parser");
+
+const app = express();
+const port = 3000;
+const host = '0.0.0.0';
+
+const connection = require('./db');
+
+connection.connect();
+
+app.use(cors());
+app.use(bodyParser.json());
+app.use('/api', require('./controls'));
+
+app.listen(port, host, () => {
+  console.log(`Started server: ${host}/${port}`);
+});
 ```
